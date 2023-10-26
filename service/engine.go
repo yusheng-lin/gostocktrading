@@ -2,25 +2,28 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"sync"
-	"time"
 	dm "yusheng/stocktrading/domain"
 )
 
 type Engine struct {
 	Cache map[string]*dm.OrderBook
 	lock  sync.RWMutex
+	ch    chan string
 }
 
 func NewEngine() dm.IEngine {
 	return &Engine{
 		Cache: make(map[string]*dm.OrderBook),
+		ch:    make(chan string),
 	}
 }
 
 func (engine *Engine) AddOrder(order *dm.Order) {
 	book := engine.GetOrderBook(order.Symbol)
 	book.AddOrder(order)
+	engine.ch <- order.Symbol
 }
 
 func (engine *Engine) GetOrderBook(symbol string) *dm.OrderBook {
@@ -41,20 +44,22 @@ func (engine *Engine) GetOrderBook(symbol string) *dm.OrderBook {
 
 func (engine *Engine) MatchOrders() context.CancelFunc {
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		for {
-			time.Sleep(50 * time.Millisecond)
-			select {
-			case <-ctx.Done():
-				return // kill goroutine
-			default:
-				engine.lock.RLock()
-				for _, book := range engine.Cache {
-					book.MatchOrders()
+	fmt.Println("init 4 workers")
+	for i := 0; i < 4; i++ {
+		go func(engine *Engine, ctx context.Context) {
+			for {
+				select {
+				case <-ctx.Done():
+					fmt.Println("recieved cancel signal")
+					return // kill goroutine
+				case symbol := <-engine.ch:
+					engine.lock.RLock()
+					engine.GetOrderBook(symbol).MatchOrders()
+					engine.lock.RUnlock()
+				default:
 				}
-				engine.lock.RUnlock()
 			}
-		}
-	}()
+		}(engine, ctx)
+	}
 	return cancel
 }

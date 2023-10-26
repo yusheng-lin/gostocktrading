@@ -43,19 +43,21 @@ func (orderBook *OrderBook) MatchOrders() {
 	for orderBook.BuyOrders.Len() > 0 && orderBook.SellOrders.Len() > 0 {
 		buyOrder := heap.Pop(orderBook.BuyOrders).(Order)
 		sellOrder := heap.Pop(orderBook.SellOrders).(Order)
+		if sellOrder.Price > buyOrder.Price {
+			break
+		}
 		if buyOrder.Price >= sellOrder.Price {
 			quantity := min(buyOrder.Quantity, sellOrder.Quantity)
 			price := sellOrder.Price
 			fmt.Printf("c%d buy %d $%.2f %s from c%d \n", buyOrder.CustomerID, quantity, price, orderBook.Symbol, sellOrder.CustomerID)
 			buyOrder.Quantity -= quantity
 			sellOrder.Quantity -= quantity
-
-			if buyOrder.Quantity > 0 {
-				heap.Push(orderBook.BuyOrders, buyOrder)
-			}
-			if sellOrder.Quantity > 0 {
-				heap.Push(orderBook.SellOrders, sellOrder)
-			}
+		}
+		if buyOrder.Quantity > 0 {
+			heap.Push(orderBook.BuyOrders, buyOrder)
+		}
+		if sellOrder.Quantity > 0 {
+			heap.Push(orderBook.SellOrders, sellOrder)
 		}
 	}
 }
